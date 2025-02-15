@@ -1,6 +1,5 @@
 //收集于网络，免费分享，仅供测试交流，禁止内置售卖！
 {"storeHouse": [
 {"sourceName":"卢api","sourceUrl":"https://cdn.jsdelivr.net/gh/luyuanbo79/luyuanbo@%E5%8D%A2/iptv-api/%E6%8E%A5%E5%8F%A3.json"},
-{"sourceName":"主接口","sourceUrl":"https://raw.gitcode.com/lutaolun/sjh/raw/main/%E6%8E%A5%E5%8F%A32.json"}, 
-{"sourceName":"卢单仓","sourceUrl":"https://lz.qaiu.top/parser?url=https://luyuanbo.lanzouv.com/iXm7k2m36b6b"}
+{"sourceName":"主接口","sourceUrl":https://cdn.jsdelivr.net/gh/luyuanbo79/luyuanbo@%E5%8D%A2/iptv-api/%E6%8E%A5%E5%8F%A32.json""}
 ]}
