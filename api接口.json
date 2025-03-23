@@ -145,10 +145,42 @@
         { "url":"https://jihulab.com/xuanzhuapp/xzys/-/raw/main/xzvip.json",
             "name":"炫猪"
         },
-        { "url":"https://mirror.ghproxy.com/https://raw.githubusercontent.com/supermeguo/BoxRes/main/Myuse/cat.json",
+        { "url":"https://github.moeyy.xyz/https://raw.githubusercontent.com/supermeguo/BoxRes/main/Myuse/cat.json",
             "name":"柠檬"
         },
- {"url":"http://ok321.top/tv","name":"OK线路"},
+        { "url":"http://52pan.top:81/api/v3/file/get/174964/%E5%90%BE%E7%88%B1%E8%AF%84%E6%B5%8B.m3u?sign=rPssLoffquDXszCARt6UNF8MobSa1FA27Xo",
+            "name":"吾爱运动（运动资源专用）"
+        },
+        { "url":"https://download.kstore.space/download/2883/nzk/nzk0722.json",
+            "name":"潇洒空间（直播中有网络轮播资源）：首次加载较慢"
+        },
+        { "url":"http://120.79.4.185/dc.json",
+            "name":"码点小干货"
+        },
+        { "url":"https://git.acwing.com/iduoduo/orange/-/raw/main/jsm.json",
+            "name":"PG线路（首次加载较慢）"
+        },
+        { "url":"https://api.hgyx.vip/hgyx.json",
+            "name":"夜猫子（结果较少）"
+        },
+        { "url":"https://download.kstore.space/download/2883/nzk/nzk0722.json",
+            "name":"D佬魔改（结果较少）"
+        },
+        { "url":"https://mirror.ghproxy.com/https://raw.githubusercontent.com/kunkka1986/my.img/main/frjbox.json",
+            "name":"缝纫机（结果较少）"
+        },
+        { "url":"https://szyyds.cn/tv/x.json",
+            "name":"小马影视"
+        },
+        { "url":"https://ghproxy.net/https://raw.githubusercontent.com/xiaolinshao/linshao/main/1.json",
+            "name":"小林（首次加载较慢）"
+        },
+        { "url":"https://9xi4o.tk/tvbox.json",
+            "name":"盐枭（时不时添加不进去）"
+        },
+        { "url":"http://jin.锦哥哥.love",
+            "name":"一十线路（时不时添加不进去）"
+        }, {"url":"http://ok321.top/tv","name":"OK线路"},
         {"url":"http://xhztv.top/xhz","name":"聚玩盒子"},
         {"url":"https://盒子迷.top/禁止贩卖","name":"盒子密"},
         {"url":"http://home.jundie.top:81/top98.json","name":"俊于"},
