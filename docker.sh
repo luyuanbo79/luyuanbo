@@ -7,7 +7,7 @@
 
 ## Docker CE 软件源列表
 mirror_list_docker_ce=(
-    "mirrors-xtom.644564.xyz/docker-ce"
+    "mirrors.aliyun.l.lybua.top/docker-ce"
     "mirrors.tencent.com/docker-ce"
     "mirrors.huaweicloud.com/docker-ce"
     "mirrors.cmecloud.cn/docker-ce"
@@ -63,7 +63,7 @@ mirror_list_registry=(
 # 需要同时在两个数组变量中分别定义软件源地址，并且保证排列顺序一致
 # 软件源公网地址列表
 mirror_list_extranet=(
-    "mirrors-xtom.644564.xyz/docker-ce"
+    "mirrors.aliyun.l.lybua.top/docker-ce"
     "mirrors.tencent.com/docker-ce"
     "mirrors.huaweicloud.com/docker-ce"
     "mirrors.volces.com/docker-ce"
