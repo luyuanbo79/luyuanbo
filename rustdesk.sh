@@ -200,11 +200,11 @@ RDLATEST=$(curl https://api.github.com/repos/rustdesk/rustdesk-server/releases/l
 
 echo "Installing Rustdesk Server"
 if [ "${ARCH}" = "x86_64" ] ; then
-wget "https://github.com/rustdesk/rustdesk-server/releases/download/${RDLATEST}/rustdesk-server-linux-amd64.zip"
+wget "http://ghproxy.2.8.f.a.0.0.9.1.0.0.0.7.4.0.1.0.0.2.ip6.arpa/github.com/rustdesk/rustdesk-server/releases/download/${RDLATEST}/rustdesk-server-linux-amd64.zip"
 unzip rustdesk-server-linux-amd64.zip
 mv amd64/* /opt/rustdesk/
 elif [ "${ARCH}" = "armv7l" ] ; then
-wget "https://github.com/rustdesk/rustdesk-server/releases/download/${RDLATEST}/rustdesk-server-linux-armv7.zip"
+wget "http://ghproxy.2.8.f.a.0.0.9.1.0.0.0.7.4.0.1.0.0.2.ip6.arpa/github.com/rustdesk/rustdesk-server/releases/download/${RDLATEST}/rustdesk-server-linux-armv7.zip"
 unzip rustdesk-server-linux-armhf.zip
 mv armv7/* /opt/rustdesk/
 elif [ "${ARCH}" = "aarch64" ] ; then
