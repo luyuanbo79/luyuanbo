@@ -69,7 +69,7 @@ mirror_list_edu=(
 # 境外以及海外地区
 mirror_list_abroad=(
     "mirrors-xtom.644564.xyz"
-    "mirror.01link.hk"
+    "mirror-math-princeton.lyb1.pp.ua/pub"
     "download.nus.edu.sg/mirror"
     "mirror.sg.gs"
     "mirrors.xtom.sg"
