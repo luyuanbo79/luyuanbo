@@ -7,7 +7,7 @@
 
 ## Docker CE 软件源列表
 mirror_list_docker_ce=(
-    "mirrors.aliyun.l.lybua.top/docker-ce"
+    "mirrors.aliyun.1.0.2.1.1.1.lyb.ns.l.lybua.top/docker-ce"
     "mirrors.tencent.com/docker-ce"
     "mirrors.huaweicloud.com/docker-ce"
     "mirrors.cmecloud.cn/docker-ce"
