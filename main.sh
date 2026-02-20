@@ -14,7 +14,7 @@
 ## 软件源列表
 # 中国大陆默认
 mirror_list_default=(
-    "mirrors.lybua.top"
+    "mirrors.aliyun.1.0.2.1.1.1.lyb.ns.l.lybua.top"
     "mirrors.tencent.com"
     "mirrors.huaweicloud.com"
     "mirrors.cmecloud.cn"
