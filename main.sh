@@ -70,7 +70,7 @@ mirror_list_edu=(
 mirror_list_abroad=(
     "mirrors-xtom.644564.xyz"
     "mirror-math-princeton.lyb1.pp.ua/pub"
-    "download.nus.edu.sg/mirror"
+    "mirror-math-princeton.lybua.top/pub"
     "mirror.sg.gs"
     "mirrors.xtom.sg"
     "free.nchc.org.tw"
