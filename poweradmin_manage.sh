@@ -21,8 +21,15 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # 全局变量定义
 PA_WEB_DIR="/var/www/poweradmin"
 PDNS_CONF_PATH="/etc/powerdns/pdns.conf"
+# PowerDNS全局配置变量（自动读取填充）
+PDNS_DNS_PORT=""
+PDNS_WEBSERVER_ENABLE=""
+PDNS_WEBSERVER_PORT=""
+PDNS_API_ENABLE=""
+PDNS_API_KEY=""
+PDNS_API_ALLOW_FROM=""
 
-# 系统发行版检测与环境适配（核心兼容逻辑）
+# 系统发行版检测与环境适配（核心兼容逻辑，修复PHP检测时机）
 detect_os() {
     if [[ ! -f /etc/os-release ]]; then
         log_error "无法检测系统发行版，仅支持Debian/Ubuntu/RHEL/CentOS/Rocky/AlmaLinux系列"
@@ -72,30 +79,30 @@ detect_os() {
         log_error "不支持的系统：$OS，仅支持Debian/Ubuntu/RHEL/CentOS/Rocky/AlmaLinux系列"
         exit 1
     fi
-
-    # 自动获取PHP-FPM服务名与socket路径（解决不同版本适配问题）
-    get_php_info() {
-        if [[ $OS == @(debian|ubuntu) ]]; then
-            PHP_FPM_SERVICE=$(systemctl list-unit-files | grep -E 'php.*fpm\.service' | awk '{print $1}' | head -n 1)
-            PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "")
-            PHP_FPM_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
-        else
-            PHP_FPM_SERVICE="php-fpm.service"
-            PHP_FPM_SOCKET="/run/php-fpm/www.sock"
-        fi
-
-        # 兜底处理：socket不存在则用TCP端口
-        if [[ ! -S $PHP_FPM_SOCKET ]]; then
-            log_warn "未检测到PHP-FPM socket，自动切换为127.0.0.1:9000"
-            PHP_FPM_SOCKET="127.0.0.1:9000"
-        fi
-    }
-    get_php_info
 }
 
-# 本地PowerDNS环境检查（核心：确保能对接本地PowerDNS）
-check_local_pdns() {
-    log_info "检查本地PowerDNS环境..."
+# PHP-FPM信息获取（仅在PHP安装完成后调用，修复提前调用报错问题）
+get_php_info() {
+    if [[ $OS == @(debian|ubuntu) ]]; then
+        PHP_FPM_SERVICE=$(systemctl list-unit-files | grep -E 'php.*fpm\.service' | awk '{print $1}' | head -n 1)
+        PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "")
+        PHP_FPM_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
+    else
+        PHP_FPM_SERVICE="php-fpm.service"
+        PHP_FPM_SOCKET="/run/php-fpm/www.sock"
+    fi
+
+    # 兜底处理：socket不存在则用TCP端口
+    if [[ ! -S $PHP_FPM_SOCKET ]]; then
+        log_warn "未检测到PHP-FPM socket，自动切换为127.0.0.1:9000"
+        PHP_FPM_SOCKET="127.0.0.1:9000"
+    fi
+    log_info "PHP-FPM环境适配完成，服务名：$PHP_FPM_SERVICE，通信地址：$PHP_FPM_SOCKET"
+}
+
+# 本地PowerDNS环境检查+端口/API配置读取与自动配置（新增核心功能）
+check_and_config_pdns() {
+    log_info "===== 检查本地PowerDNS环境并读取核心配置 ====="
     # 检查PowerDNS配置文件是否存在
     if [[ ! -f $PDNS_CONF_PATH ]]; then
         log_error "未检测到本地PowerDNS配置文件：$PDNS_CONF_PATH"
@@ -103,12 +110,12 @@ check_local_pdns() {
         exit 1
     fi
 
-    # 检查PowerDNS数据库配置
-    PDNS_DB_HOST=$(grep -w "gmysql-host" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs)
-    PDNS_DB_PORT=$(grep -w "gmysql-port" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs || echo 3306)
-    PDNS_DB_NAME=$(grep -w "gmysql-dbname" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs)
-    PDNS_DB_USER=$(grep -w "gmysql-user" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs)
-    PDNS_DB_PASS=$(grep -w "gmysql-password" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs)
+    # 1. 读取PowerDNS数据库核心配置（原有功能）
+    PDNS_DB_HOST=$(grep -w "gmysql-host" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "127.0.0.1")
+    PDNS_DB_PORT=$(grep -w "gmysql-port" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo 3306)
+    PDNS_DB_NAME=$(grep -w "gmysql-dbname" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "")
+    PDNS_DB_USER=$(grep -w "gmysql-user" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "")
+    PDNS_DB_PASS=$(grep -w "gmysql-password" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "")
 
     if [[ -z $PDNS_DB_NAME || -z $PDNS_DB_USER || -z $PDNS_DB_PASS ]]; then
         log_error "无法从PowerDNS配置中读取数据库信息，请确认PowerDNS已正确安装并使用MySQL后端"
@@ -120,11 +127,87 @@ check_local_pdns() {
         log_error "PowerDNS数据库连接失败，请确认MariaDB/MySQL服务正常运行"
         exit 1
     fi
+    log_info "✅ PowerDNS数据库配置读取成功，连通性正常"
 
-    log_info "本地PowerDNS环境检测通过，已成功读取数据库配置"
+    # 2. 新增：读取PowerDNS端口、API核心配置
+    PDNS_DNS_PORT=$(grep -w "local-port" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "53")
+    PDNS_WEBSERVER_ENABLE=$(grep -w "webserver" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "no")
+    PDNS_WEBSERVER_PORT=$(grep -w "webserver-port" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "8081")
+    PDNS_API_ENABLE=$(grep -w "api" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "no")
+    PDNS_API_KEY=$(grep -w "api-key" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "")
+    PDNS_API_ALLOW_FROM=$(grep -w "allow-from" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "127.0.0.0/8, ::1/128")
+
+    # 输出读取到的PowerDNS配置
+    log_info "✅ 读取到PowerDNS核心配置："
+    echo "  DNS服务监听端口：$PDNS_DNS_PORT"
+    echo "  WebServer状态：$PDNS_WEBSERVER_ENABLE"
+    echo "  API功能状态：$PDNS_API_ENABLE"
+    if [[ -n $PDNS_API_KEY ]]; then
+        echo "  API密钥已配置"
+    else
+        echo "  API密钥：未配置"
+    fi
+
+    # 3. 新增：自动配置PowerDNS API与WebServer（未开启时自动引导配置）
+    if [[ $PDNS_API_ENABLE != "yes" || $PDNS_WEBSERVER_ENABLE != "yes" || -z $PDNS_API_KEY ]]; then
+        log_warn "检测到PowerDNS的WebServer/API功能未完全开启/未配置密钥"
+        read -p "是否自动开启PowerDNS API与WebServer并生成强密钥？(yes/no，默认yes)：" CONFIG_API
+        CONFIG_API=${CONFIG_API:-yes}
+        if [[ $CONFIG_API == "yes" ]]; then
+            log_info "正在自动配置PowerDNS API与WebServer..."
+            # 备份原配置文件
+            cp $PDNS_CONF_PATH ${PDNS_CONF_PATH}.bak.$(date +%Y%m%d%H%M%S)
+            log_info "已备份PowerDNS原配置文件至${PDNS_CONF_PATH}.bak.$(date +%Y%m%d%H%M%S)"
+
+            # 生成强API密钥
+            NEW_API_KEY=$(openssl rand -hex 32)
+            # 写入/更新配置
+            sed -i '/^webserver=/d' $PDNS_CONF_PATH
+            sed -i '/^webserver-port=/d' $PDNS_CONF_PATH
+            sed -i '/^webserver-address=/d' $PDNS_CONF_PATH
+            sed -i '/^webserver-allow-from=/d' $PDNS_CONF_PATH
+            sed -i '/^api=/d' $PDNS_CONF_PATH
+            sed -i '/^api-key=/d' $PDNS_CONF_PATH
+            sed -i '/^allow-from=/d' $PDNS_CONF_PATH
+
+            # 追加配置
+            cat >> $PDNS_CONF_PATH <<EOF
+
+# PowerAdmin&API管理配置（自动生成）
+webserver=yes
+webserver-address=0.0.0.0
+webserver-port=8081
+webserver-allow-from=127.0.0.0/8,::1/128
+api=yes
+api-key=$NEW_API_KEY
+allow-from=127.0.0.0/8,::1/128
+EOF
+
+            # 重启PowerDNS使配置生效
+            log_info "正在重启PowerDNS服务使API配置生效..."
+            if systemctl restart pdns; then
+                # 更新全局变量
+                PDNS_WEBSERVER_ENABLE="yes"
+                PDNS_WEBSERVER_PORT="8081"
+                PDNS_API_ENABLE="yes"
+                PDNS_API_KEY=$NEW_API_KEY
+                log_info "✅ PowerDNS API与WebServer配置完成，已重启生效"
+                log_info "✅ 生成的API密钥：$NEW_API_KEY（请妥善保管）"
+            else
+                log_error "PowerDNS重启失败，请检查配置文件：$PDNS_CONF_PATH"
+                exit 1
+            fi
+        else
+            log_warn "已跳过PowerDNS API配置，部分高级功能可能无法使用"
+        fi
+    else
+        log_info "✅ PowerDNS API与WebServer已正常配置，无需修改"
+    fi
+
+    log_info "===== PowerDNS环境检查与配置完成 ====="
 }
 
-# 防火墙与SELinux配置
+# 防火墙与SELinux配置（新增API端口放行）
 configure_firewall() {
     log_info "正在配置防火墙与系统权限规则..."
     # 防火墙适配
@@ -132,6 +215,11 @@ configure_firewall() {
         if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
             ufw allow 80/tcp
             ufw allow 443/tcp
+            # 放行PowerDNS API端口
+            if [[ $PDNS_WEBSERVER_ENABLE == "yes" && -n $PDNS_WEBSERVER_PORT ]]; then
+                ufw allow $PDNS_WEBSERVER_PORT/tcp
+                log_info "已开放PowerDNS API/WebServer $PDNS_WEBSERVER_PORT 端口（TCP）"
+            fi
             ufw reload
             log_info "已开放Web 80/443端口（TCP）"
         fi
@@ -139,6 +227,11 @@ configure_firewall() {
         if command -v firewalld &>/dev/null && systemctl is-active --quiet firewalld; then
             firewall-cmd --permanent --add-port=80/tcp
             firewall-cmd --permanent --add-port=443/tcp
+            # 放行PowerDNS API端口
+            if [[ $PDNS_WEBSERVER_ENABLE == "yes" && -n $PDNS_WEBSERVER_PORT ]]; then
+                firewall-cmd --permanent --add-port=$PDNS_WEBSERVER_PORT/tcp
+                log_info "已开放PowerDNS API/WebServer $PDNS_WEBSERVER_PORT 端口（TCP）"
+            fi
             firewall-cmd --reload
             log_info "已开放Web 80/443端口（TCP）"
         fi
@@ -156,7 +249,8 @@ configure_firewall() {
 # 1. 安装PowerAdmin（自动对接本地PowerDNS）
 install_poweradmin() {
     detect_os
-    check_local_pdns
+    # 先检查并配置PowerDNS（含端口、API读取与配置）
+    check_and_config_pdns
 
     # 1. 安装运行环境依赖
     log_info "开始安装Nginx+PHP运行环境..."
@@ -166,7 +260,7 @@ install_poweradmin() {
     $PKG_UPDATE
     $PKG_INSTALL $NGINX_PACKAGE $PHP_PACKAGES curl tar
 
-    # 重新获取PHP信息（安装后更新）
+    # 安装完成后再获取PHP信息（修复原bug）
     get_php_info
 
     # 检查依赖服务是否安装成功
@@ -270,6 +364,12 @@ EOF
     # 安全配置
     sed -i "s/\$session_key = 'encryption key';/\$session_key = '$SESSION_KEY';/g" $PA_CONF_FILE
     sed -i "s/\$dnssec_enabled = false;/\$dnssec_enabled = true;/g" $PA_CONF_FILE
+    # 对接PowerDNS API
+    if [[ $PDNS_API_ENABLE == "yes" && -n $PDNS_API_KEY ]]; then
+        sed -i "s/\$pdns_api_url = '';/\$pdns_api_url = 'http:\/\/127.0.0.1:$PDNS_WEBSERVER_PORT';/g" $PA_CONF_FILE
+        sed -i "s/\$pdns_api_key = '';/\$pdns_api_key = '$PDNS_API_KEY';/g" $PA_CONF_FILE
+        log_info "已自动将PowerDNS API配置写入PowerAdmin"
+    fi
 
     # 权限配置（关键：避免403/500权限错误）
     chown -R $WWW_USER:$WWW_GROUP $PA_WEB_DIR
@@ -359,65 +459,77 @@ EOF
     # 7. 防火墙配置
     configure_firewall
 
-    # 8. 安装完成，输出信息
+    # 8. 安装完成，输出完整信息（含新增的PowerDNS端口、API信息）
     log_info "====================================="
-    log_info "PowerAdmin 安装完成！已自动对接本地PowerDNS"
+    log_info "🎉 PowerAdmin 安装完成！已自动对接本地PowerDNS"
+    echo "【PowerAdmin面板信息】"
     echo "访问地址：http://$SERVER_NAME"
     echo "默认管理员账号：admin"
     echo "默认管理员密码：admin"
-    echo "面板数据库名：$PA_DB"
-    echo "面板数据库用户：$PA_USER"
+    echo "面板安装目录：$PA_WEB_DIR"
+    echo ""
+    echo "【PowerDNS核心信息】"
+    echo "DNS服务端口：$PDNS_DNS_PORT"
+    echo "API/WebServer状态：已开启"
+    echo "API访问地址：http://$SERVER_IP:$PDNS_WEBSERVER_PORT"
+    echo "API密钥：$PDNS_API_KEY"
     log_info "====================================="
     log_warn "【重要安全提醒1】请立即登录面板修改默认管理员密码！"
     log_warn "【重要安全提醒2】请执行以下命令删除安装目录，避免安全风险："
     log_warn "rm -rf $PA_WEB_DIR/install"
+    log_warn "【重要安全提醒3】API密钥已自动生成，请妥善保管，请勿泄露给无关人员"
 }
 
 # 2. 启动PowerAdmin服务
 start_poweradmin() {
     detect_os
+    # 安装后才会有PHP信息，这里重新获取适配
+    get_php_info 2>/dev/null || true
     log_info "正在启动PowerAdmin依赖服务（Nginx+PHP-FPM）..."
 
     # 启动服务
     systemctl start nginx
-    systemctl start $PHP_FPM_SERVICE
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl start $PHP_FPM_SERVICE
 
     # 检查状态
-    if systemctl is-active --quiet nginx && systemctl is-active --quiet $PHP_FPM_SERVICE; then
+    if systemctl is-active --quiet nginx && ([[ -z $PHP_FPM_SERVICE ]] || systemctl is-active --quiet $PHP_FPM_SERVICE); then
         log_info "PowerAdmin服务启动成功，Web服务已正常运行"
     else
         log_error "服务启动失败，请分别检查Nginx和PHP-FPM状态"
         echo "Nginx状态：systemctl status nginx"
-        echo "PHP-FPM状态：systemctl status $PHP_FPM_SERVICE"
+        [[ -n $PHP_FPM_SERVICE ]] && echo "PHP-FPM状态：systemctl status $PHP_FPM_SERVICE"
     fi
 }
 
 # 3. 停止PowerAdmin服务
 stop_poweradmin() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_warn "正在停止PowerAdmin依赖服务，停止后将无法访问Web面板"
     systemctl stop nginx
-    systemctl stop $PHP_FPM_SERVICE
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl stop $PHP_FPM_SERVICE
     log_info "PowerAdmin服务已停止"
 }
 
 # 4. 重启PowerAdmin服务
 restart_poweradmin() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_info "正在重启PowerAdmin依赖服务..."
     systemctl restart nginx
-    systemctl restart $PHP_FPM_SERVICE
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl restart $PHP_FPM_SERVICE
 
-    if systemctl is-active --quiet nginx && systemctl is-active --quiet $PHP_FPM_SERVICE; then
+    if systemctl is-active --quiet nginx && ([[ -z $PHP_FPM_SERVICE ]] || systemctl is-active --quiet $PHP_FPM_SERVICE); then
         log_info "PowerAdmin服务重启成功"
     else
         log_error "服务重启失败，请检查服务日志"
     fi
 }
 
-# 5. 查看PowerAdmin服务状态
+# 5. 查看PowerAdmin服务状态（新增PowerDNS API状态查看）
 status_poweradmin() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_info "===== PowerAdmin 服务状态 ====="
     echo -e "Nginx服务状态：\c"
     if systemctl is-active --quiet nginx; then
@@ -433,7 +545,7 @@ status_poweradmin() {
     fi
 
     echo -e "\nPHP-FPM服务状态：\c"
-    if systemctl is-active --quiet $PHP_FPM_SERVICE; then
+    if [[ -n $PHP_FPM_SERVICE && systemctl is-active --quiet $PHP_FPM_SERVICE ]]; then
         echo -e "${GREEN}运行中${NC}"
         echo -e "PHP-FPM开机自启：\c"
         if systemctl is-enabled --quiet $PHP_FPM_SERVICE; then
@@ -442,7 +554,18 @@ status_poweradmin() {
             echo -e "${YELLOW}已关闭${NC}"
         fi
     else
-        echo -e "${RED}已停止${NC}"
+        echo -e "${RED}已停止/未安装${NC}"
+    fi
+
+    # 新增：PowerDNS API状态查看
+    echo -e "\n【PowerDNS关联状态】"
+    if [[ -f $PDNS_CONF_PATH ]]; then
+        PDNS_API_STATUS=$(grep -w "api" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "no")
+        PDNS_API_PORT=$(grep -w "webserver-port" $PDNS_CONF_PATH | awk -F= '{print $2}' | xargs 2>/dev/null || echo "8081")
+        echo -e "PowerDNS API功能：$([[ $PDNS_API_STATUS == "yes" ]] && echo -e "${GREEN}已开启${NC}" || echo -e "${YELLOW}已关闭${NC}")"
+        echo -e "PowerDNS API端口：$PDNS_API_PORT"
+    else
+        echo -e "PowerDNS配置文件：${RED}未找到${NC}"
     fi
 
     # 访问地址信息
@@ -461,11 +584,12 @@ status_poweradmin() {
 # 6. 设置PowerAdmin开机自启
 enable_autostart() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_info "正在设置PowerAdmin开机自启（Nginx+PHP-FPM）..."
     systemctl enable --now nginx
-    systemctl enable --now $PHP_FPM_SERVICE
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl enable --now $PHP_FPM_SERVICE
 
-    if systemctl is-enabled --quiet nginx && systemctl is-enabled --quiet $PHP_FPM_SERVICE; then
+    if systemctl is-enabled --quiet nginx && ([[ -z $PHP_FPM_SERVICE ]] || systemctl is-enabled --quiet $PHP_FPM_SERVICE); then
         log_info "PowerAdmin开机自启设置成功，服务器重启后将自动启动Web服务"
     else
         log_error "开机自启设置失败"
@@ -475,15 +599,17 @@ enable_autostart() {
 # 7. 关闭PowerAdmin开机自启
 disable_autostart() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_warn "正在关闭PowerAdmin开机自启，服务器重启后Web服务将不会自动启动"
     systemctl disable nginx
-    systemctl disable $PHP_FPM_SERVICE
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl disable $PHP_FPM_SERVICE
     log_info "PowerAdmin开机自启已关闭"
 }
 
 # 8. 完全卸载PowerAdmin
 uninstall_poweradmin() {
     detect_os
+    get_php_info 2>/dev/null || true
     log_warn "【警告】此操作将卸载PowerAdmin，可选择是否删除配置、数据库、依赖包，数据删除后无法恢复！"
     read -p "是否确认继续卸载？请输入 yes 确认：" CONFIRM
     [[ $CONFIRM != "yes" ]] && { log_info "已取消卸载操作"; return; }
@@ -491,9 +617,9 @@ uninstall_poweradmin() {
     # 1. 停止服务
     log_info "停止PowerAdmin相关服务..."
     systemctl stop nginx || true
-    systemctl stop $PHP_FPM_SERVICE || true
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl stop $PHP_FPM_SERVICE || true
     systemctl disable nginx || true
-    systemctl disable $PHP_FPM_SERVICE || true
+    [[ -n $PHP_FPM_SERVICE ]] && systemctl disable $PHP_FPM_SERVICE || true
 
     # 2. 删除面板文件
     read -p "是否删除PowerAdmin面板Web文件？输入 yes 确认：" DEL_WEB
@@ -561,6 +687,25 @@ EOF
         log_info "已保留防火墙规则"
     fi
 
+    # 新增：清理PowerDNS API端口防火墙规则
+    read -p "是否关闭PowerDNS API 8081端口防火墙规则？输入 yes 确认：" DEL_API_PORT
+    if [[ $DEL_API_PORT == "yes" ]]; then
+        if [[ $OS == @(debian|ubuntu) ]]; then
+            if command -v ufw &>/dev/null && ufw status | grep -q "active"; then
+                ufw delete allow 8081/tcp || true
+                ufw reload
+            fi
+        elif [[ $OS == @(centos|rhel|rocky|almalinux) ]]; then
+            if command -v firewalld &>/dev/null && systemctl is-active --quiet firewalld; then
+                firewall-cmd --permanent --remove-port=8081/tcp || true
+                firewall-cmd --reload
+            fi
+        fi
+        log_info "PowerDNS API 8081端口防火墙规则已清理"
+    else
+        log_info "已保留API端口防火墙规则"
+    fi
+
     # 6. 卸载运行依赖
     read -p "是否卸载Nginx和PHP依赖包？输入 yes 确认：" DEL_DEP
     if [[ $DEL_DEP == "yes" ]]; then
@@ -574,7 +719,15 @@ EOF
     log_info "PowerAdmin卸载操作执行完成"
 }
 
-# 菜单展示函数
+# 9. 新增：单独查看/配置PowerDNS API功能
+config_pdns_api_alone() {
+    detect_os
+    check_and_config_pdns
+    echo ""
+    read -p "按回车键返回主菜单..."
+}
+
+# 菜单展示函数（新增API配置菜单）
 show_menu() {
     clear
     echo "====================================="
@@ -583,19 +736,20 @@ show_menu() {
     echo "====================================="
     echo "【安装部署】"
     echo " 1. 安装PowerAdmin（自动对接本地PowerDNS）"
+    echo " 2. 单独配置PowerDNS API/端口（无需安装面板）"
     echo "-------------------------------------"
     echo "【服务管理】"
-    echo " 2. 启动PowerAdmin服务"
-    echo " 3. 停止PowerAdmin服务"
-    echo " 4. 重启PowerAdmin服务"
-    echo " 5. 查看PowerAdmin服务状态"
+    echo " 3. 启动PowerAdmin服务"
+    echo " 4. 停止PowerAdmin服务"
+    echo " 5. 重启PowerAdmin服务"
+    echo " 6. 查看PowerAdmin服务状态"
     echo "-------------------------------------"
     echo "【开机自启管理】"
-    echo " 6. 设置PowerAdmin开机自启"
-    echo " 7. 关闭PowerAdmin开机自启"
+    echo " 7. 设置PowerAdmin开机自启"
+    echo " 8. 关闭PowerAdmin开机自启"
     echo "-------------------------------------"
     echo "【卸载清理】"
-    echo " 8. 完全卸载PowerAdmin"
+    echo " 9. 完全卸载PowerAdmin"
     echo "-------------------------------------"
     echo " 0. 退出脚本"
     echo "====================================="
@@ -608,13 +762,14 @@ main() {
         show_menu
         case $MENU_CHOICE in
             1) install_poweradmin ;;
-            2) start_poweradmin ;;
-            3) stop_poweradmin ;;
-            4) restart_poweradmin ;;
-            5) status_poweradmin ;;
-            6) enable_autostart ;;
-            7) disable_autostart ;;
-            8) uninstall_poweradmin ;;
+            2) config_pdns_api_alone ;;
+            3) start_poweradmin ;;
+            4) stop_poweradmin ;;
+            5) restart_poweradmin ;;
+            6) status_poweradmin ;;
+            7) enable_autostart ;;
+            8) disable_autostart ;;
+            9) uninstall_poweradmin ;;
             0) log_info "脚本已退出，感谢使用"; exit 0 ;;
             *) log_error "无效的操作编号，请重新输入" ;;
         esac
