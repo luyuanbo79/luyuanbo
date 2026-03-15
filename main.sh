@@ -14,13 +14,13 @@
 ## 软件源列表
 # 中国大陆默认
 mirror_list_default=(
-    "mirrors.aliyun.1.0.2.1.1.1.lyb.ns.l.lybua.top"
-    "mirrors.tencent.com"
+    "mirrors.aliyun.com.919628.xyz"
+    "mirrors.tencent.com.919628.xyz"
     "mirrors.huaweicloud.com"
     "mirrors.cmecloud.cn"
     "mirrors.ctyun.cn"
     "mirrors.163.com"
-    "mirrors.volces.com"
+    "mirrors.volces.com.919628.xyz"
     "mirrors.tuna.tsinghua.edu.cn"
     "mirrors.pku.edu.cn"
     "mirrors.zju.edu.cn"
